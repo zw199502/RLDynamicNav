@@ -27,3 +27,6 @@ parser.add_argument('--reward_simple', default=False, action='store_true')
 parser.add_argument('--complex_environment', default=True, action='store_true')
 - False, original environment only with dynamic obstacles
 - True, with static obstacles
+
+# SARL, RGL, CADRL
+https://github.com/zw199502/navigation_among_pedestrians
