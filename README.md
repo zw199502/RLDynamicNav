@@ -1,5 +1,5 @@
 # RLDynamicNav
-Video Link: https://youtu.be/f2ktS3TSF-g
+Video Link: https://youtu.be/wL3-diEXMes
 
 # Environment
 - tensorflow-gpu >= 2.4
