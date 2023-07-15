@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Input, Dense, concatenate, Flatten, Conv2D, 
 from tensorflow.keras.optimizers import Adam
 # revise it from crowd_sim.py
 lidar_dim = 1800
-n_lidar = 4
+n_lidar = 5
 position_dim = 2
 # revise it from crowd_sim.py
 
