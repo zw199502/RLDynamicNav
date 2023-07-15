@@ -4,6 +4,7 @@ from policy.orca import ORCA
 from policy.sac import SAC
 from policy.ddpg import DDPG
 from policy.sac_simple import SAC_Simple
+from policy.random_policy import random_policy
 
 policy_factory = dict()
 policy_factory['lidar_dqn'] = Lidar_DQN
@@ -12,4 +13,5 @@ policy_factory['orca'] = ORCA
 policy_factory['sac'] = SAC
 policy_factory['ddpg'] = DDPG
 policy_factory['sac_simple'] = SAC_Simple
+policy_factory['random_policy'] = random_policy
 
