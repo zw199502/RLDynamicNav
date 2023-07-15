@@ -24,16 +24,20 @@ cdef float PI = 3.141592654
 cdef float *scan_last_1
 cdef float *scan_last_2
 cdef float *scan_last_3
+cdef float *scan_last_4
+cdef float *scan_last_5
 cdef float *scan_end_last_1
 cdef float *scan_end_last_2
 cdef float *scan_end_last_3
+cdef float *scan_end_last_4
+cdef float *scan_end_last_5
 
 def InitializeEnv(_num_line: int, _num_circle: int, _num_scan: int, _laser_resolution: float):
     global num_line, num_circle, num_scan
     global lines, circles, scans, scan_lines, robot_pose
     global laser_resolution
-    global scan_last_1, scan_last_2, scan_last_3
-    global scan_end_last_1, scan_end_last_2, scan_end_last_3
+    global scan_last_1, scan_last_2, scan_last_3, scan_last_4, scan_last_5
+    global scan_end_last_1, scan_end_last_2, scan_end_last_3, scan_end_last_4, scan_end_last_5
 
     num_line = _num_line
     num_circle = _num_circle
@@ -49,13 +53,19 @@ def InitializeEnv(_num_line: int, _num_circle: int, _num_scan: int, _laser_resol
     scan_last_1 = <float*>malloc(num_scan * sizeof(float))
     scan_last_2 = <float*>malloc(num_scan * sizeof(float))
     scan_last_3 = <float*>malloc(num_scan * sizeof(float))
+    scan_last_4 = <float*>malloc(num_scan * sizeof(float))
+    scan_last_5 = <float*>malloc(num_scan * sizeof(float))
     for i in range(num_scan):
         scan_last_1[i] = 999.9
         scan_last_2[i] = 999.9
         scan_last_3[i] = 999.9
+        scan_last_4[i] = 999.9
+        scan_last_5[i] = 999.9
     scan_end_last_1 = <float*>malloc(num_scan * 2 * sizeof(float))
     scan_end_last_2 = <float*>malloc(num_scan * 2 * sizeof(float))
     scan_end_last_3 = <float*>malloc(num_scan * 2 * sizeof(float))
+    scan_end_last_4 = <float*>malloc(num_scan * 2 * sizeof(float))
+    scan_end_last_5 = <float*>malloc(num_scan * 2 * sizeof(float))
 
 def set_lines(index: int, item: float):
     global lines
@@ -72,16 +82,22 @@ def set_robot_pose(x: float, y: float, yaw: float):
     robot_pose[2] = yaw
 
 def set_scan_end_last(x: float, y: float, index: int, scan: int):
-    global scan_end_last_1, scan_end_last_2, scan_end_last_3
+    global scan_end_last_1, scan_end_last_2, scan_end_last_3, scan_end_last_4, scan_end_last_5
     if scan == 1:
         scan_end_last_1[2 * index] = x
         scan_end_last_1[2 * index + 1] = y
     elif scan == 2:
         scan_end_last_2[2 * index] = x
         scan_end_last_2[2 * index + 1] = y
-    else:
+    elif scan == 3:
         scan_end_last_3[2 * index] = x
         scan_end_last_3[2 * index + 1] = y
+    elif scan == 4:
+        scan_end_last_4[2 * index] = x
+        scan_end_last_4[2 * index + 1] = y
+    elif scan == 5:
+        scan_end_last_5[2 * index] = x
+        scan_end_last_5[2 * index + 1] = y
 
 
 def cal_laser():
@@ -203,8 +219,8 @@ def cal_laser():
 
 def transform_scan_last():
     global robot_pose, num_scan, laser_resolution
-    global scan_last_1, scan_last_2, scan_last_3
-    global scan_end_last_1, scan_end_last_2, scan_end_last_3
+    global scan_last_1, scan_last_2, scan_last_3, scan_last_4, scan_last_5
+    global scan_end_last_1, scan_end_last_2, scan_end_last_3, scan_end_last_4, scan_end_last_5
     cdef float dx, dy, theta, scan_x, scan_y, scan_angle
     cdef int scan_index
     theta = robot_pose[2]
@@ -237,7 +253,27 @@ def transform_scan_last():
         if scan_angle >= -PI and scan_angle <= PI:
             scan_index = int((scan_angle + (PI - laser_resolution / 2.0)) / laser_resolution)
             if scan_index >=0 and scan_index < num_scan:
-                scan_last_3[scan_index] = hypot(scan_x, scan_y)    
+                scan_last_3[scan_index] = hypot(scan_x, scan_y)   
+
+        dx = scan_end_last_4[2 * i] - robot_pose[0]
+        dy = scan_end_last_4[2 * i + 1] - robot_pose[1]
+        scan_x = dy * sin(theta) + dx * cos(theta)
+        scan_y = dy * cos(theta) - dx * sin(theta)
+        scan_angle = atan2(scan_y, scan_x)
+        if scan_angle >= -PI and scan_angle <= PI:
+            scan_index = int((scan_angle + (PI - laser_resolution / 2.0)) / laser_resolution)
+            if scan_index >=0 and scan_index < num_scan:
+                scan_last_4[scan_index] = hypot(scan_x, scan_y)    
+
+        # dx = scan_end_last_5[2 * i] - robot_pose[0]
+        # dy = scan_end_last_5[2 * i + 1] - robot_pose[1]
+        # scan_x = dy * sin(theta) + dx * cos(theta)
+        # scan_y = dy * cos(theta) - dx * sin(theta)
+        # scan_angle = atan2(scan_y, scan_x)
+        # if scan_angle >= -PI and scan_angle <= PI:
+        #     scan_index = int((scan_angle + (PI - laser_resolution / 2.0)) / laser_resolution)
+        #     if scan_index >=0 and scan_index < num_scan:
+        #         scan_last_5[scan_index] = hypot(scan_x, scan_y)    
 
     # for i in range(num_scan):
     #     if i == 0:
@@ -281,18 +317,22 @@ def get_scan_line(index: int):
     return scan_lines[index]
 
 def get_last_scan(index: int, scan: int):
-    global scan_last_1, scan_last_2, scan_last_3
+    global scan_last_1, scan_last_2, scan_last_3, scan_last_4, scan_last_5
     if scan == 1:
         return scan_last_1[index]
     elif scan == 2:
         return scan_last_2[index]
-    else:
+    elif scan == 3:
         return scan_last_3[index]
+    elif scan == 4:
+        return scan_last_4[index]
+    elif scan == 5:
+        return scan_last_5[index]
 
 def ReleaseEnv():
     global lines, circles, scans, scan_lines, robot_pose
-    global scan_last_1, scan_last_2, scan_last_3
-    global scan_end_last_1, scan_end_last_2, scan_end_last_3
+    global scan_last_1, scan_last_2, scan_last_3, scan_last_4, scan_last_5
+    global scan_end_last_1, scan_end_last_2, scan_end_last_3, scan_end_last_4, scan_end_last_5
     free(lines)
     free(circles)
     free(scans)
@@ -301,6 +341,10 @@ def ReleaseEnv():
     free(scan_last_1)
     free(scan_last_2)
     free(scan_last_3)
+    free(scan_last_4)
+    free(scan_last_5)
     free(scan_end_last_1)
     free(scan_end_last_2)
     free(scan_end_last_3)
+    free(scan_end_last_4)
+    free(scan_end_last_5)
