@@ -272,7 +272,7 @@ if __name__ == '__main__':
     # save network weights every checkpoint_interval episodes
     parser.add_argument('--checkpoint_interval', type=int, default='2000')
     
-    parser.add_argument('--output_dir', type=str, default='data4/frame_5_random_policy_4')
+    parser.add_argument('--output_dir', type=str, default='data4/frame_5_default')
     parser.add_argument('--gpu', default=True, action='store_true')
     parser.add_argument('--reward_simple', default=False, action='store_true')
     parser.add_argument('--env_type', type=str, default='normal') # normal, complex, variable
