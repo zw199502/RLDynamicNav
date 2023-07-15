@@ -1,3 +1,4 @@
+from email.policy import default
 import sys
 import logging
 import argparse
@@ -38,7 +39,7 @@ def update_memory(lidars, positions, actions, rewards, next_lidars, next_positio
         done = dones[i]
         memory.put(lidar, position, action, reward, next_lidar, next_position, done)
 
-def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memory=False, episode=None):
+def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memory=False, episode=None, current_step=0):
     success_times = []
     collision_times = []
     timeout_times = []
@@ -50,13 +51,16 @@ def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memo
     cumulative_rewards = []
     collision_cases = []
     timeout_cases = []
+    steps = 0
     for i in range(k):
         lidar, position, ob_coordinate = env.reset(phase)
         # env.render()
+        # time.sleep(0.25)
         done = False
         lidars, positions, actions, rewards, next_lidars, next_positions, dones = [], [], [], [], [], [], []
         rewards = []
         while not done:
+            steps += 1
             action = im_policy.predict(ob_coordinate)
             if args.policy == 'sac' or args.policy == 'ddpg' or args.policy == 'sac_simple': # continuous action
                 if not if_initialize_memory:
@@ -91,20 +95,23 @@ def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memo
                 if not if_initialize_memory:
                     probability = np.random.uniform(0.0, 1.0, 1)[0]
                     if phase == 'train' and probability < epsilon:
-                        action_idx_noise = np.random.randint(7, size=2)
-                        vx_idx = vx_idx + (action_idx_noise[0] - 3)
-                        if vx_idx < 0:
-                            vx_idx = 0
-                        elif vx_idx >= v_sample_num:
-                            vx_idx = v_sample_num - 1
-                        vy_idx = vy_idx + (action_idx_noise[1] - 3)
-                        if vy_idx < 0:
-                            vy_idx = 0
-                        elif vy_idx >= v_sample_num:
-                            vy_idx = v_sample_num - 1
-                        action_idx = vx_idx * v_sample_num + vy_idx
+                        if args.im_policy == 'orca':
+                            action_idx_noise = np.random.randint(7, size=2)
+                            vx_idx = vx_idx + (action_idx_noise[0] - 3)
+                            if vx_idx < 0:
+                                vx_idx = 0
+                            elif vx_idx >= v_sample_num:
+                                vx_idx = v_sample_num - 1
+                            vy_idx = vy_idx + (action_idx_noise[1] - 3)
+                            if vy_idx < 0:
+                                vy_idx = 0
+                            elif vy_idx >= v_sample_num:
+                                vy_idx = v_sample_num - 1
+                            action_idx = vx_idx * v_sample_num + vy_idx
                     else:
-                        action_idx = target_policy.get_action(lidar, position)
+                        lidar_tensor = tf.convert_to_tensor(lidar, dtype=tf.float32)
+                        position_tensor = tf.convert_to_tensor(position, dtype=tf.float32)
+                        action_idx = target_policy.get_action(lidar_tensor, position_tensor)
                 _action = action_space[action_idx]
             next_lidar, next_position, next_ob_coordinate, reward, done, info = env.step(_action)
             # env.render()
@@ -154,6 +161,8 @@ def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memo
     avg_nav_time = sum(success_times) / len(success_times) if success_times else env.time_limit
 
     extra_info = '' if episode is None else 'in episode {} '.format(episode)
+    if phase in ['val', 'test']:
+        extra_info = extra_info + ' current step ' + str(current_step) + ' '
     logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.2f}, nav time: {:.2f}, total reward: {:.4f}'.
                     format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
                         average(cumulative_rewards)))
@@ -163,15 +172,22 @@ def run_k_episodes(k, phase, epsilon, if_update_memory=False, if_initialize_memo
                         too_close / num_step, average(min_dist))
         logging.info('Collision cases: ' + ' '.join([str(x) for x in collision_cases]))
         logging.info('Timeout cases: ' + ' '.join([str(x) for x in timeout_cases]))
+    return steps
 
 def main():
     epsilon = epsilon_start
     target_policy.target_update()
     # fill memory
-    run_k_episodes(initialize_memory, 'train', epsilon, if_update_memory=True, if_initialize_memory=True)
+    if args.im_policy == 'random_policy':
+        run_k_episodes(50, 'train', epsilon, if_update_memory=True, if_initialize_memory=True)
+    else:
+        run_k_episodes(initialize_memory, 'train', epsilon, if_update_memory=True, if_initialize_memory=True)
     logging.info('Experience set initial size: %d/%d', memory.size(), memory.capacity)
     # initial training
-    target_policy.set_lr(it_learning_rate)
+    if args.im_policy == 'random_policy':
+        target_policy.set_lr(rl_learning_rate)
+    else:
+        target_policy.set_lr(it_learning_rate)
     for ii in range(it_iterations):
         target_policy.optimize_batch(it_batches, memory, batch_size)
         target_policy.target_update()
@@ -179,6 +195,7 @@ def main():
 
     episode = 0
     target_policy.set_lr(rl_learning_rate)
+    running_step = 0
     while episode < train_episodes:
         if episode < epsilon_decay:
             epsilon = epsilon_start + (epsilon_end - epsilon_start) / epsilon_decay * episode
@@ -186,9 +203,10 @@ def main():
             epsilon = epsilon_end
         
         if episode % evaluation_interval == 0:
-            run_k_episodes(env.case_size['val'], 'val', epsilon, episode=episode)
+            run_k_episodes(env.case_size['val'], 'val', epsilon, episode=episode, current_step=running_step)
         # sample k (default is 1) episodes into memory and optimize over the generated memory
-        run_k_episodes(sample_episodes, 'train', epsilon, if_update_memory=True, episode=episode)
+        train_step = run_k_episodes(sample_episodes, 'train', epsilon, if_update_memory=True, episode=episode)
+        running_step += train_step
 
         target_policy.optimize_batch(train_batches, memory, batch_size)
 
@@ -244,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_episodes', type=int, default='20000') # total training episodes
     parser.add_argument('--target_update_interval', type=int, default='20') # update the target model every target_update_interval episodes
     parser.add_argument('--sample_episodes', type=int, default='1')  # how many episodes for each iteration
-    parser.add_argument('--evaluation_interval', type=int, default='1000') # evaluate the model every evaluation_interval episodes
+    parser.add_argument('--evaluation_interval', type=int, default='100') # evaluate the model every evaluation_interval episodes
     parser.add_argument('--capacity', type=int, default='100000')  # size of experience pool, default is 100000
     # probability of randomly choosing action
     parser.add_argument('--epsilon_start', type=float, default='0.8')
@@ -254,10 +272,10 @@ if __name__ == '__main__':
     # save network weights every checkpoint_interval episodes
     parser.add_argument('--checkpoint_interval', type=int, default='2000')
     
-    parser.add_argument('--output_dir', type=str, default='data4/output_lidar_dqn_complex')
+    parser.add_argument('--output_dir', type=str, default='data4/frame_5_random_policy_4')
     parser.add_argument('--gpu', default=True, action='store_true')
     parser.add_argument('--reward_simple', default=False, action='store_true')
-    parser.add_argument('--complex_environment', default=True, action='store_true')
+    parser.add_argument('--env_type', type=str, default='normal') # normal, complex, variable
     args = parser.parse_args()
 
     # configure paths
@@ -294,7 +312,7 @@ if __name__ == '__main__':
     file_configure.write('epsilon_decay: ' + (str(args.epsilon_decay)) + '\n')
     file_configure.write('checkpoint_interval: ' + (str(args.checkpoint_interval)) + '\n')
     file_configure.write('reward_simple: ' + (str(args.reward_simple)) + '\n')
-    file_configure.write('complex_environment: ' + (str(args.complex_environment)) + '\n')
+    file_configure.write('env_type: ' + (str(args.env_type)) + '\n')
     file_configure.write('output_dir: ' + args.output_dir + '\n')
     file_configure.close()
     # save configuration
@@ -316,10 +334,10 @@ if __name__ == '__main__':
     # allocate gpu
     if args.gpu:
         gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-        gpu_index = 2
+        gpu_index = 0
         tf.config.experimental.set_visible_devices(devices=gpus[gpu_index], device_type='GPU')
         tf.config.experimental.set_virtual_device_configuration(gpus[gpu_index], \
-        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=3072)])
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
         device = 'gpu:' + str(gpu_index)
     else:
         device = 'cpu'
@@ -344,10 +362,12 @@ if __name__ == '__main__':
     memory = ReplayMemory(capacity)
 
     # configure environment
-    if args.complex_environment:
+    if args.env_type == 'complex':
         from crowd_sim_complicate import CrowdSim
-    else:
+    elif args.env_type == 'normal':
         from crowd_sim import CrowdSim
+    elif args.env_type == 'variable':
+        from crowd_sim_variable import CrowdSim
     env = CrowdSim()
     env.configure(reward_simple=args.reward_simple)
     
