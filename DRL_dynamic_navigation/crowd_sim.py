@@ -1,8 +1,8 @@
 import logging
-import matplotlib.pyplot as plt
-import matplotlib.animation as ani
+# import matplotlib.pyplot as plt
+# import matplotlib.animation as ani
 import numpy as np
-from matplotlib import collections as mc
+# from matplotlib import collections as mc
 from numpy.linalg import norm
 from utils.human import Human
 from utils.robot import Robot
@@ -61,14 +61,18 @@ class CrowdSim:
         self.scan_last_1 = np.zeros(n_laser, dtype=np.float32)
         self.scan_last_2 = np.zeros(n_laser, dtype=np.float32)
         self.scan_last_3 = np.zeros(n_laser, dtype=np.float32)
+        self.scan_last_4 = np.zeros(n_laser, dtype=np.float32)
+        self.scan_last_5 = np.zeros(n_laser, dtype=np.float32)
         self.scan_end_current = np.zeros((n_laser, 2), dtype=np.float32)
         self.scan_end_last_1 = np.zeros((n_laser, 2), dtype=np.float32)
         self.scan_end_last_2 = np.zeros((n_laser, 2), dtype=np.float32)
         self.scan_end_last_3 = np.zeros((n_laser, 2), dtype=np.float32)
+        self.scan_end_last_4 = np.zeros((n_laser, 2), dtype=np.float32)
+        self.scan_end_last_5 = np.zeros((n_laser, 2), dtype=np.float32)
 
-        plt.ion()
-        plt.show()
-        self.fig, self.ax = plt.subplots(figsize=(10, 10))
+        # plt.ion()
+        # plt.show()
+        # self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.human1_position = []
         self.human2_position = []
         self.human3_position = []
@@ -198,29 +202,61 @@ class CrowdSim:
             self.scan_last_1 = np.copy(self.scan_current)
             self.scan_last_2 = np.copy(self.scan_current)
             self.scan_last_3 = np.copy(self.scan_current)
+            self.scan_last_4 = np.copy(self.scan_current)
+            # self.scan_last_5 = np.copy(self.scan_current)
             self.scan_end_last_1 = np.copy(self.scan_end_current)
             self.scan_end_last_2 = np.copy(self.scan_end_current)
             self.scan_end_last_3 = np.copy(self.scan_end_current)
+            self.scan_end_last_4 = np.copy(self.scan_end_current)
+            # self.scan_end_last_5 = np.copy(self.scan_end_current)
         else:
             for i in range(n_laser):
                 set_scan_end_last(self.scan_end_current[i, 0], self.scan_end_current[i, 1], i, 1)
                 set_scan_end_last(self.scan_end_last_1[i, 0], self.scan_end_last_1[i, 1], i, 2)
                 set_scan_end_last(self.scan_end_last_2[i, 0], self.scan_end_last_2[i, 1], i, 3)
+                set_scan_end_last(self.scan_end_last_3[i, 0], self.scan_end_last_3[i, 1], i, 4)
+                # set_scan_end_last(self.scan_end_last_4[i, 0], self.scan_end_last_4[i, 1], i, 5)
+            # t1 = time()
             transform_scan_last()    
+            # print('time: ', time() - t1)
             for i in range(n_laser):
                 self.scan_last_1[i] = get_last_scan(i, 1)
                 self.scan_last_2[i] = get_last_scan(i, 2)
                 self.scan_last_3[i] = get_last_scan(i, 3)
+                self.scan_last_4[i] = get_last_scan(i, 4)
+                # self.scan_last_5[i] = get_last_scan(i, 5)
+            # self.scan_last_5 = np.clip(self.scan_last_5, laser_min_range, laser_max_range) / laser_max_range
+            self.scan_last_4 = np.clip(self.scan_last_4, laser_min_range, laser_max_range) / laser_max_range
             self.scan_last_3 = np.clip(self.scan_last_3, laser_min_range, laser_max_range) / laser_max_range
             self.scan_last_2 = np.clip(self.scan_last_2, laser_min_range, laser_max_range) / laser_max_range
             self.scan_last_1 = np.clip(self.scan_last_1, laser_min_range, laser_max_range) / laser_max_range            
             self.scan_current = np.clip(scan, laser_min_range, laser_max_range) / laser_max_range
 
+            # self.scan_end_last_5 = np.copy(self.scan_end_last_4)
+            self.scan_end_last_4 = np.copy(self.scan_end_last_3)
             self.scan_end_last_3 = np.copy(self.scan_end_last_2)
             self.scan_end_last_2 = np.copy(self.scan_end_last_1)
             self.scan_end_last_1 = np.copy(self.scan_end_current)
             self.scan_end_current = np.copy(scan_end)
         #### proposed method ####
+
+        #### no center transformation ####
+        # if isReset:
+        #     self.scan_current = np.clip(scan, laser_min_range, laser_max_range) / laser_max_range
+        #     self.scan_end_current = np.copy(scan_end)
+        #     self.scan_last_1 = np.copy(self.scan_current)
+        #     self.scan_last_2 = np.copy(self.scan_current)
+        #     self.scan_last_3 = np.copy(self.scan_current)
+        #     self.scan_last_4 = np.copy(self.scan_current)
+        #     # self.scan_last_5 = np.copy(self.scan_current)
+        # else:
+        #     # self.scan_last_5 = self.scan_last_4
+        #     self.scan_last_4 = self.scan_last_3
+        #     self.scan_last_3 = self.scan_last_2
+        #     self.scan_last_2 = self.scan_last_1
+        #     self.scan_last_1 = self.scan_current            
+        #     self.scan_current = np.clip(scan, laser_min_range, laser_max_range) / laser_max_range
+        #### no center transformation ####
 
         ReleaseEnv()
 
@@ -236,7 +272,7 @@ class CrowdSim:
         
         if self.case_counter[phase] >= 0:
             # for every training/valuation/test, generate same initial human states
-            np.random.seed(counter_offset[phase] + self.case_counter[phase])
+            # np.random.seed(counter_offset[phase] + self.case_counter[phase])
             self.generate_random_human_position()
     
             # case_counter is always between 0 and case_size[phase]
@@ -247,7 +283,7 @@ class CrowdSim:
         self.get_lidar(isReset=True)
 
         # get the observation
-        ob_lidar = np.hstack((self.scan_current, self.scan_last_1, self.scan_last_2, self.scan_last_3))
+        ob_lidar = np.hstack((self.scan_current, self.scan_last_1, self.scan_last_2, self.scan_last_3, self.scan_last_4))
         dx = self.robot.gx - self.robot.px
         dy = self.robot.gy - self.robot.py
         theta = self.robot.theta
@@ -378,7 +414,7 @@ class CrowdSim:
                 self.humans[i].gy = -self.humans[i].gy
 
         # get the observation
-        ob_lidar = np.hstack((self.scan_current, self.scan_last_1, self.scan_last_2, self.scan_last_3))
+        ob_lidar = np.hstack((self.scan_current, self.scan_last_1, self.scan_last_2, self.scan_last_3, self.scan_last_4))
         dx = self.robot.gx - self.robot.px
         dy = self.robot.gy - self.robot.py
         theta = self.robot.theta
